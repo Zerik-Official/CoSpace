@@ -21,6 +21,7 @@
     "register": "Create account",
     "logout": "Sign out",
     "menuLabel": "Account menu",
+    "primary": "Main navigation",
     "openMenu": "Open menu",
     "closeMenu": "Close menu"
   },
@@ -225,7 +226,7 @@
     "label": "Your local time",
     "explanation": "It is computed in your browser, which is why it only appears once the page has loaded."
   },
-  "Errors": {
+  "errors": {
     "VALIDATION_ERROR": "Check these fields: {fields}.",
     "INVALID_CREDENTIALS": "That email and password do not match any account.",
     "UNAUTHENTICATED": "Your session ended. Sign in again.",
@@ -235,7 +236,7 @@
     "EMAIL_ALREADY_REGISTERED": "An account already exists for that email.",
     "RATE_LIMITED": "Too many attempts. Wait {retryAfterSeconds} seconds before trying again.",
     "SPACE_NOT_AVAILABLE": "This space is deactivated and takes no bookings.",
-    "SPACE_HAS_FUTURE_RESERVATIONS": "It cannot be deactivated: it holds {reservations} confirmed bookings ahead.",
+    "SPACE_HAS_FUTURE_RESERVATIONS": "It cannot be deactivated: it holds {reservations} confirmed bookings pending.",
     "SPACE_ALREADY_INACTIVE": "This space was already deactivated.",
     "RESERVATION_WINDOW_NOT_WHOLE_HOURS": "Bookings start and end on the hour: 10:00 to 12:00, not 10:30 to 11:45.",
     "RESERVATION_DURATION_OUT_OF_RANGE": "A booking must last between {minHours} and {maxHours} hours.",
@@ -247,6 +248,8 @@
     "RESERVATION_FUTURE_LIMIT_REACHED": "You reached the limit of {maxReservations} future confirmed bookings.",
     "RESERVATION_ALREADY_CANCELLED": "That booking was already cancelled.",
     "RESERVATION_CANCELLATION_TOO_LATE": "A booking can only be cancelled up to {noticeHours} hours before it starts.",
+    "IDEMPOTENCY_KEY_CONFLICT": "That idempotency key is already associated with another booking.",
+    "CONCURRENT_MODIFICATION": "The operation collided with another simultaneous change. Try again.",
     "INTERNAL_ERROR": "Something broke on our side. Try again in a moment."
   }
 }
