@@ -18,6 +18,15 @@ const passwordSchema = z
 
 const spaceTypeSchema = z.enum([SpaceType.DESK, SpaceType.MEETING_ROOM, SpaceType.CABIN]);
 
+const publicImagePathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .refine((value) => value.startsWith("/") && !value.startsWith("//"), {
+    message: "Image must be a path inside the public folder",
+  });
+
 /** Payload accepted by the registration endpoint. */
 export const registerPayloadSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
@@ -51,7 +60,7 @@ export const createSpacePayloadSchema = z.object({
   type: spaceTypeSchema,
   capacity: z.number().int().min(1).max(100),
   pricePerHour: z.number().positive().max(10_000_000),
-  imageUrl: z.url(),
+  imageUrl: publicImagePathSchema,
   amenities: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
 });
 
