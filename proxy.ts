@@ -74,7 +74,7 @@ export default async function proxy(request: NextRequest): Promise<NextResponse>
 
   if (!snapshot.user) {
     const loginUrl = new URL(`/${locale}/login`, request.url);
-    loginUrl.searchParams.set("next", request.nextUrl.pathname);
+    loginUrl.searchParams.set("next", path);
 
     return NextResponse.redirect(loginUrl);
   }
