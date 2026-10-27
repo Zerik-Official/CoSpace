@@ -11,6 +11,7 @@ import { TurnstileVerifier } from "@/server/security/turnstile-verifier";
 import { AuthService } from "@/server/services/auth.service";
 import { ReservationService } from "@/server/services/reservation.service";
 import { SessionService } from "@/server/services/session.service";
+import { SpaceImageService } from "@/server/services/space-image.service";
 import { SpaceService } from "@/server/services/space.service";
 
 const LOGIN_MAX_ATTEMPTS = 5;
@@ -40,6 +41,9 @@ export class ApplicationContainer {
   /** Registration and login service. */
   readonly auth: AuthService;
 
+  /** Binary images uploaded for the spaces. */
+  readonly spaceImages: SpaceImageService;
+
   /** Space catalog and administration service. */
   readonly spaces: SpaceService;
 
@@ -68,7 +72,8 @@ export class ApplicationContainer {
     const spacePolicy = new SpacePolicy();
     const reservationPolicy = new ReservationPolicy(this.clock);
 
-    this.spaces = new SpaceService(prisma, spacePolicy, this.clock);
+    this.spaceImages = new SpaceImageService(prisma);
+    this.spaces = new SpaceService(prisma, spacePolicy, this.clock, this.spaceImages);
     this.reservations = new ReservationService(prisma, reservationPolicy, this.clock);
   }
 }

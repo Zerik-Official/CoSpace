@@ -166,6 +166,12 @@ Se pueden cambiar con `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` y `SEED_ADMIN_NA
 
 El seed también carga ocho espacios de ejemplo: cuatro escritorios, dos salas de reunión y dos cabinas.
 
+### Imágenes de los espacios
+
+El administrador puede subir una imagen directamente desde el formulario de creación o edición. El formulario valida el archivo, muestra una vista previa antes de guardar y permite quitar la selección o elegir otro archivo. Los formatos aceptados son PNG, JPEG y WebP, hasta 2 MB.
+
+La imagen se guarda en la tabla `SpaceImage` y se sirve desde `/api/spaces/images/:id`, así que la subida funciona en Vercel, Docker y un VPS normal sin carpeta pública escribible ni una cuenta externa de almacenamiento. Al reemplazar una imagen se elimina la anterior cuando ningún otro espacio la usa. Las ilustraciones SVG incluidas siguen disponibles cuando no se sube un archivo. Aplica las migraciones antes de usar esta función.
+
 ## Reglas de negocio
 
 - Las reservas empiezan y terminan en horas completas del reloj del local.
@@ -208,7 +214,7 @@ Las reglas de reserva viven en `src/server/domain/reservation-policy.ts` y las d
 bun run test
 ```
 
-La suite cubre las reglas de duración, horario, anticipación, solapamiento, cuota, cancelación, estado de los espacios y validación de la ruta pública de las imágenes, además de la verificación de Turnstile y los payloads de autenticación. No necesita una base de datos.
+La suite cubre las reglas de duración, horario, anticipación, solapamiento, cuota, cancelación, estado de los espacios y validación de la ruta pública de las imágenes, además de la verificación de Turnstile, los payloads de autenticación y la validación de imágenes de espacios. No necesita una base de datos.
 
 ## Docker
 
@@ -334,6 +340,7 @@ docker-compose.yml      PostgreSQL y aplicación para desarrollo local
 - El proxy protege `/dashboard` y `/admin`; el backend vuelve a comprobar la sesión y el rol en cada endpoint.
 - El inicio de sesión y el registro exigen un token de Cloudflare Turnstile verificado en el servidor.
 - Los intentos de inicio de sesión tienen límite por dirección del cliente y correo.
+- Solo los administradores pueden subir imágenes de espacios; los archivos tienen límite de tamaño y su contenido se comprueba contra el formato declarado.
 - Los errores de API usan códigos estables y se traducen en el cliente; los detalles internos solo se escriben en los logs.
 - La creación de reservas exige `Idempotency-Key` desde la interfaz y la clave queda ligada al usuario que la creó.
 

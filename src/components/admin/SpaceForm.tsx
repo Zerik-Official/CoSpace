@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import Image from "next/image";
 import { PlusIcon } from "lucide-animated";
 import { useTranslations } from "next-intl";
 
@@ -12,6 +13,12 @@ import { isApiErrorEnvelope } from "@/lib/api/envelope";
 import { useApiErrorMessage } from "@/lib/api/use-api-error-message";
 import { AMENITY_KEYS, type AmenityKey } from "@/lib/domain/amenities";
 import { SpaceType } from "@/lib/domain/enums";
+import {
+  SPACE_IMAGE_ACCEPT,
+  SPACE_IMAGE_MAX_BYTES,
+  SPACE_IMAGE_MIME_TYPES,
+  type UploadedSpaceImage,
+} from "@/lib/domain/space-images";
 import type { SpaceDetail } from "@/lib/domain/types";
 
 /** Props accepted by the space form. */
@@ -97,6 +104,63 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
   const [values, setValues] = useState<SpaceFormValues>(() => valuesFromSpace(spaceToEdit));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setImageError(null);
+
+    if (
+      file.type &&
+      !(SPACE_IMAGE_MIME_TYPES as readonly string[]).includes(file.type.toLowerCase())
+    ) {
+      setImageError(t("imageInvalidType"));
+      return;
+    }
+
+    if (file.size > SPACE_IMAGE_MAX_BYTES) {
+      setImageError(t("imageTooLarge", { maxMb: Math.round(SPACE_IMAGE_MAX_BYTES / (1024 * 1024)) }));
+      return;
+    }
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleRemoveFile = (): void => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setImageError(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const toggleAmenity = (amenity: AmenityKey): void => {
     setValues((current) => ({
@@ -111,6 +175,29 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
     event.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
+    setImageError(null);
+
+    let uploadedImageId: string | null = null;
+    let imageUrl = values.imageUrl;
+
+    if (selectedFile) {
+      const uploadBody = new FormData();
+      uploadBody.append("image", selectedFile);
+
+      const uploadEnvelope = await apiRequest<{ image: UploadedSpaceImage }>(
+        "/api/admin/spaces/images",
+        { method: "POST", body: uploadBody },
+      );
+
+      if (isApiErrorEnvelope(uploadEnvelope)) {
+        setIsSubmitting(false);
+        setErrorMessage(resolveApiError(uploadEnvelope));
+        return;
+      }
+
+      uploadedImageId = uploadEnvelope.data.image.id;
+      imageUrl = uploadEnvelope.data.image.url;
+    }
 
     const body = {
       code: values.code.trim().toUpperCase(),
@@ -119,7 +206,7 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
       type: values.type,
       capacity: Number(values.capacity),
       pricePerHour: Number(values.pricePerHour),
-      imageUrl: values.imageUrl,
+      imageUrl,
       amenities: values.amenities,
     };
 
@@ -133,15 +220,37 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
     setIsSubmitting(false);
 
     if (isApiErrorEnvelope(envelope)) {
+      if (uploadedImageId) {
+        await apiRequest(`/api/admin/spaces/images/${uploadedImageId}`, { method: "DELETE" });
+      }
+
       setErrorMessage(resolveApiError(envelope));
       return;
     }
 
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setImageError(null);
     onSaved(envelope.data.space);
+
     if (!spaceToEdit) {
       setValues(valuesFromSpace(null));
     }
   };
+
+  const originalUploadedImage =
+    spaceToEdit && !IMAGE_OPTIONS.includes(spaceToEdit.imageUrl) ? spaceToEdit.imageUrl : null;
+  const imageChoices = Array.from(
+    new Set([
+      ...(IMAGE_OPTIONS.includes(values.imageUrl) ? [] : [values.imageUrl]),
+      ...(originalUploadedImage ? [originalUploadedImage] : []),
+      ...IMAGE_OPTIONS,
+    ]),
+  );
 
   return (
     <form
@@ -218,14 +327,79 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
         />
       </div>
 
-      <SelectField
-        name="imageUrl"
-        label={t("imageLabel")}
-        hint={t("imageHint")}
-        value={values.imageUrl}
-        onChange={(event) => setValues((current) => ({ ...current, imageUrl: event.target.value }))}
-        options={IMAGE_OPTIONS.map((image) => ({ value: image, label: image }))}
-      />
+      <fieldset className="flex flex-col gap-2.5">
+        <legend className="mb-1 text-[0.8rem] font-medium text-ink-soft">
+          {t("imageLabel")}
+        </legend>
+
+        <div className="relative aspect-[16/9] overflow-hidden rounded-[var(--radius-card)] border border-line bg-paper">
+          <Image
+            src={previewUrl ?? values.imageUrl}
+            alt={t("imagePreviewAlt")}
+            fill
+            unoptimized
+            sizes="(min-width: 640px) 24rem, 100vw"
+            className="object-cover"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            htmlFor="space-image-upload"
+            className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[var(--radius-card)] border border-line bg-surface px-3.5 text-[0.85rem] font-medium text-ink transition-colors hover:border-line-strong hover:bg-paper"
+          >
+            {selectedFile ? t("imageReplace") : t("imageUpload")}
+          </label>
+          <input
+            ref={fileInputRef}
+            id="space-image-upload"
+            type="file"
+            accept={SPACE_IMAGE_ACCEPT}
+            className="sr-only"
+            disabled={isSubmitting}
+            onChange={handleFileChange}
+          />
+          {selectedFile ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              disabled={isSubmitting}
+              onClick={handleRemoveFile}
+            >
+              {t("imageRemove")}
+            </Button>
+          ) : null}
+        </div>
+
+        <p className="text-[0.8rem] text-ink-soft">
+          {selectedFile
+            ? t("imageSelectedHint", { name: selectedFile.name })
+            : t("imageUploadHint", { maxMb: Math.round(SPACE_IMAGE_MAX_BYTES / (1024 * 1024)) })}
+        </p>
+
+        {!selectedFile ? (
+          <SelectField
+            name="imageUrl"
+            label={t("imagePresetLabel")}
+            hint={t("imageHint")}
+            value={values.imageUrl}
+            onChange={(event) =>
+              setValues((current) => ({ ...current, imageUrl: event.target.value }))
+            }
+            options={imageChoices.map((image) => ({
+              value: image,
+              label:
+                image === values.imageUrl && !IMAGE_OPTIONS.includes(image)
+                  ? t("imageCurrent")
+                  : image === originalUploadedImage
+                    ? t("imageOriginal")
+                    : image,
+            }))}
+          />
+        ) : null}
+
+        {imageError ? <Alert tone="error">{imageError}</Alert> : null}
+      </fieldset>
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-[0.8rem] font-medium text-ink-soft">

@@ -16,6 +16,7 @@ import { isUniqueConstraintError } from "@/server/db/errors";
 import { runSerializableTransaction } from "@/server/db/transactions";
 import { Logger, LogTag } from "@/server/logger";
 import { toSpaceDetail, toSpaceSummary } from "@/server/services/mappers";
+import type { SpaceImageService } from "@/server/services/space-image.service";
 import type { CatalogQuery, CreateSpacePayload, UpdateSpacePayload } from "@/server/validation/schemas";
 
 /** Catalog page payload: one venue day plus the spaces serving it. */
@@ -34,11 +35,13 @@ export class SpaceService {
    * @param prisma - Prisma client used to read and write spaces.
    * @param policy - Space life cycle rules.
    * @param clock - Venue clock used to resolve catalog days.
+   * @param images - Service that owns uploaded binary images.
    */
   constructor(
     private readonly prisma: PrismaClient,
     private readonly policy: SpacePolicy,
     private readonly clock: VenueClock,
+    private readonly images: SpaceImageService,
   ) {}
 
   /**
@@ -187,6 +190,7 @@ export class SpaceService {
     try {
       const space = await this.prisma.space.update({ where: { id: spaceId }, data: payload });
 
+      await this.discardReplacedImage(existing.imageUrl, space.imageUrl);
       Logger.log("INFO", LogTag.SPACE, "Space updated", { spaceId: space.id });
       return toSpaceDetail(space);
     } catch (error) {
@@ -247,6 +251,26 @@ export class SpaceService {
     Logger.log("INFO", LogTag.SPACE, "Space deactivated", { spaceId });
 
     return toSpaceDetail(deactivated);
+  }
+
+  /**
+   * Removes the previous uploaded image after a space switches to another one.
+   * Cleanup is best effort: the catalog update must not fail because an orphan
+   * image could not be deleted.
+   *
+   * @param previousUrl - Image URL stored before the update.
+   * @param nextUrl - Image URL stored after the update.
+   */
+  private async discardReplacedImage(previousUrl: string, nextUrl: string): Promise<void> {
+    if (previousUrl === nextUrl) {
+      return;
+    }
+
+    try {
+      await this.images.discardByUrl(previousUrl);
+    } catch (error) {
+      Logger.error(LogTag.SPACE, "Could not discard a replaced space image", error);
+    }
   }
 
   /**

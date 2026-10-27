@@ -31,16 +31,24 @@ export async function apiRequest<TData>(
   options: ApiRequestOptions = {},
 ): Promise<ApiEnvelope<TData>> {
   try {
+    const requestBody: BodyInit | undefined =
+      options.body === undefined || options.body === null
+        ? undefined
+        : options.body instanceof FormData
+          ? options.body
+          : JSON.stringify(options.body);
     const response = await fetch(path, {
       method: options.method ?? "GET",
       credentials: "include",
       cache: "no-store",
       signal: options.signal,
       headers: {
-        ...(options.body === undefined ? {} : { "content-type": "application/json" }),
+        ...(options.body === undefined || options.body === null || options.body instanceof FormData
+          ? {}
+          : { "content-type": "application/json" }),
         ...options.headers,
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: requestBody,
     });
 
     return (await response.json()) as ApiEnvelope<TData>;

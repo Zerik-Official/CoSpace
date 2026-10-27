@@ -166,6 +166,12 @@ You can change them with `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, and `SEED_AD
 
 The seed also creates eight example spaces: four desks, two meeting rooms, and two cabins.
 
+### Space images
+
+Administrators can upload an image directly from the create or edit form. The form validates the file, shows a preview before saving, and lets the administrator remove the selection or choose another file. Accepted formats are PNG, JPEG, and WebP, up to 2 MB.
+
+The image is stored in the `SpaceImage` table and served from `/api/spaces/images/:id`, so uploads work on Vercel, Docker, and a plain VPS without a writable public directory or an external storage account. Replacing an image removes the previous row when no other space uses it. The included SVG illustrations remain available when no file is uploaded. Apply the migrations before using this feature.
+
 ## Business rules
 
 - Bookings start and end on whole hours of the venue clock.
@@ -208,7 +214,7 @@ Reservation rules live in `src/server/domain/reservation-policy.ts`, and space l
 bun run test
 ```
 
-The suite covers duration, opening hours, advance-window, overlap, quota, cancellation, space-state, and public image-path rules, plus Turnstile verification and authentication payload validation. It does not need a database.
+The suite covers duration, opening hours, advance-window, overlap, quota, cancellation, space-state, and public image-path rules, plus Turnstile verification, authentication payload validation, and space-image URL and storage validation. It does not need a database.
 
 ## Docker
 
@@ -334,6 +340,7 @@ docker-compose.yml      PostgreSQL and application for local development
 - The proxy protects `/dashboard` and `/admin`; the backend checks the session and role again on every endpoint.
 - Login and registration require a Cloudflare Turnstile token verified on the server.
 - Login attempts are rate-limited per client address and email.
+- Only administrators can upload space images; files are size-limited and their content is checked against the declared image format.
 - API errors use stable codes and are translated on the client; internal details are only written to logs.
 - Reservation creation requires an `Idempotency-Key` from the UI, and the key is bound to the user who created it.
 

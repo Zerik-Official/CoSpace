@@ -56,6 +56,15 @@ model Space {
   @@index([type])
 }
 
+model SpaceImage {
+  id        String   @id @default(uuid(7))
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model Reservation {
   id             String            @id @default(uuid(7))
   userId         String
