@@ -21,6 +21,7 @@
     "register": "Crear cuenta",
     "logout": "Cerrar sesión",
     "menuLabel": "Menú de cuenta",
+    "primary": "Navegación principal",
     "openMenu": "Abrir menú",
     "closeMenu": "Cerrar menú"
   },
@@ -225,7 +226,7 @@
     "label": "Tu hora local",
     "explanation": "Se calcula en tu navegador, por eso solo aparece después de cargar la página."
   },
-  "Errors": {
+  "errors": {
     "VALIDATION_ERROR": "Revisa los campos: {fields}.",
     "INVALID_CREDENTIALS": "El correo o la contraseña no coinciden con ninguna cuenta.",
     "UNAUTHENTICATED": "Tu sesión terminó. Inicia sesión de nuevo.",
@@ -235,7 +236,7 @@
     "EMAIL_ALREADY_REGISTERED": "Ya existe una cuenta con ese correo.",
     "RATE_LIMITED": "Demasiados intentos. Espera {retryAfterSeconds} segundos antes de volver a intentarlo.",
     "SPACE_NOT_AVAILABLE": "Este espacio está desactivado y no admite reservas.",
-    "SPACE_HAS_FUTURE_RESERVATIONS": "No se puede desactivar: tiene {reservations} reservas confirmadas por delante.",
+    "SPACE_HAS_FUTURE_RESERVATIONS": "No se puede desactivar: tiene {reservations} reservas confirmadas pendientes.",
     "SPACE_ALREADY_INACTIVE": "Este espacio ya estaba desactivado.",
     "RESERVATION_WINDOW_NOT_WHOLE_HOURS": "Las reservas empiezan y terminan en punto: de 10:00 a 12:00, no de 10:30 a 11:45.",
     "RESERVATION_DURATION_OUT_OF_RANGE": "La reserva debe durar entre {minHours} y {maxHours} horas.",
@@ -247,6 +248,8 @@
     "RESERVATION_FUTURE_LIMIT_REACHED": "Alcanzaste el límite de {maxReservations} reservas futuras confirmadas.",
     "RESERVATION_ALREADY_CANCELLED": "Esta reserva ya estaba cancelada.",
     "RESERVATION_CANCELLATION_TOO_LATE": "Solo se puede cancelar hasta {noticeHours} horas antes del inicio.",
+    "IDEMPOTENCY_KEY_CONFLICT": "Esa clave de idempotencia ya está asociada a otra reserva.",
+    "CONCURRENT_MODIFICATION": "La operación chocó con otro cambio simultáneo. Intenta de nuevo.",
     "INTERNAL_ERROR": "Algo falló de nuestro lado. Intenta de nuevo en un momento."
   }
 }
