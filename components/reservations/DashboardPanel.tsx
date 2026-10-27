@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LuArmchair, LuCalendarClock, LuClock, LuTriangleAlert } from "react-icons/lu";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -10,7 +10,8 @@ import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { LocalTimeBadge } from "@/components/common/LocalTimeBadge";
 import { apiRequest } from "@/lib/api/client";
-import { getApiErrorMessage, isApiErrorEnvelope } from "@/lib/api/envelope";
+import { isApiErrorEnvelope } from "@/lib/api/envelope";
+import { useApiErrorMessage } from "@/lib/api/use-api-error-message";
 import { ReservationStatus } from "@/lib/domain/enums";
 import type { ReservationDetail } from "@/lib/domain/types";
 import { formatCurrency, formatHours, formatVenueDate, formatVenueRange } from "@/lib/utils/format";
@@ -41,32 +42,41 @@ export function DashboardPanel(): ReactNode {
   const tCommon = useTranslations("Common");
   const tStatus = useTranslations("ReservationStatus");
   const locale = useLocale();
+  const resolveApiError = useApiErrorMessage();
 
   const [reservations, setReservations] = useState<ReservationDetail[]>([]);
   const [activeTab, setActiveTab] = useState<DashboardTab>("upcoming");
   const [isLoading, setIsLoading] = useState(true);
+  const [now, setNow] = useState(0);
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadReservations = useCallback(async (): Promise<void> => {
-    const envelope = await apiRequest<{ reservations: ReservationDetail[] }>(
-      "/api/reservations?scope=all",
+  useEffect(() => {
+    let isCurrent = true;
+
+    void apiRequest<{ reservations: ReservationDetail[] }>("/api/reservations?scope=all").then(
+      (envelope) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        if (isApiErrorEnvelope(envelope)) {
+          setErrorMessage(resolveApiError(envelope));
+        } else {
+          setReservations(envelope.data.reservations);
+          setErrorMessage(null);
+        }
+
+        setNow(Date.now());
+        setIsLoading(false);
+      },
     );
 
-    if (isApiErrorEnvelope(envelope)) {
-      setErrorMessage(getApiErrorMessage(envelope, (key, params) => t(key as never, params as never)));
-    } else {
-      setReservations(envelope.data.reservations);
-      setErrorMessage(null);
-    }
-
-    setIsLoading(false);
-  }, [t]);
-
-  useEffect(() => {
-    void loadReservations();
-  }, [loadReservations]);
+    return () => {
+      isCurrent = false;
+    };
+  }, [resolveApiError]);
 
   const handleCancel = async (reservationId: string): Promise<void> => {
     setCancellingId(reservationId);
@@ -80,7 +90,7 @@ export function DashboardPanel(): ReactNode {
     setPendingCancelId(null);
 
     if (isApiErrorEnvelope(envelope)) {
-      setErrorMessage(getApiErrorMessage(envelope, (key, params) => t(key as never, params as never)));
+      setErrorMessage(resolveApiError(envelope));
       return;
     }
 
@@ -92,7 +102,6 @@ export function DashboardPanel(): ReactNode {
     setErrorMessage(null);
   };
 
-  const now = Date.now();
   const visible = useMemo(() => {
     if (activeTab === "upcoming") {
       return reservations.filter((reservation) => Date.parse(reservation.startAt) >= now);
