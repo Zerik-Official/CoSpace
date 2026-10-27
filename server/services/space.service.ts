@@ -13,6 +13,7 @@ import type { VenueClock } from "@/lib/domain/venue-clock";
 import type { SpacePolicy } from "@/server/domain/space-policy";
 import { AppError, ErrorCode } from "@/server/errors";
 import { isUniqueConstraintError } from "@/server/db/errors";
+import { runSerializableTransaction } from "@/server/db/transactions";
 import { Logger, LogTag } from "@/server/logger";
 import { toSpaceDetail, toSpaceSummary } from "@/server/services/mappers";
 import type { CatalogQuery, CreateSpacePayload, UpdateSpacePayload } from "@/server/validation/schemas";
@@ -129,7 +130,7 @@ export class SpaceService {
     const spaces = await this.prisma.space.findMany({ orderBy: { code: "asc" } });
     const futureCounts = await this.prisma.reservation.groupBy({
       by: ["spaceId"],
-      where: { status: ReservationStatus.CONFIRMED, startAt: { gt: new Date() } },
+      where: { status: ReservationStatus.CONFIRMED, endAt: { gt: new Date() } },
       _count: { _all: true },
     });
 
@@ -210,22 +211,38 @@ export class SpaceService {
    * @throws AppError with code SPACE_HAS_FUTURE_RESERVATIONS when rule 13 blocks it.
    */
   async deactivate(spaceId: string): Promise<SpaceDetail> {
-    const space = await this.prisma.space.findUnique({ where: { id: spaceId } });
-    if (!space) {
-      throw new AppError(ErrorCode.NOT_FOUND, {}, "Space does not exist");
-    }
+    const deactivated = await runSerializableTransaction(
+      this.prisma,
+      async (transaction) => {
+        const space = await transaction.space.findUnique({ where: { id: spaceId } });
+        if (!space) {
+          throw new AppError(ErrorCode.NOT_FOUND, {}, "Space does not exist");
+        }
 
-    this.policy.assertStillActive(space);
+        this.policy.assertStillActive(space);
 
-    const futureReservations = await this.prisma.reservation.count({
-      where: { spaceId, status: ReservationStatus.CONFIRMED, startAt: { gt: new Date() } },
-    });
-    this.policy.assertDeactivatable(futureReservations);
+        const activeReservations = await transaction.reservation.count({
+          where: {
+            spaceId,
+            status: ReservationStatus.CONFIRMED,
+            endAt: { gt: new Date() },
+          },
+        });
+        this.policy.assertDeactivatable(activeReservations);
 
-    const deactivated = await this.prisma.space.update({
-      where: { id: spaceId },
-      data: { isActive: false },
-    });
+        return transaction.space.update({
+          where: { id: spaceId },
+          data: { isActive: false },
+        });
+      },
+      "space.deactivate",
+      () =>
+        new AppError(
+          ErrorCode.CONCURRENT_MODIFICATION,
+          {},
+          "Concurrent reservations blocked the deactivation",
+        ),
+    );
 
     Logger.log("INFO", LogTag.SPACE, "Space deactivated", { spaceId });
 
