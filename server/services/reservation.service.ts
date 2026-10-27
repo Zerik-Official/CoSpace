@@ -9,13 +9,12 @@ import type {
 } from "@/lib/domain/types";
 import type { ReservationPolicy, ReservationWindow } from "@/server/domain/reservation-policy";
 import type { VenueClock } from "@/lib/domain/venue-clock";
-import { isSerializationError, isUniqueConstraintError } from "@/server/db/errors";
+import { isUniqueConstraintError } from "@/server/db/errors";
+import { runSerializableTransaction } from "@/server/db/transactions";
 import { AppError, ErrorCode } from "@/server/errors";
 import { Logger, LogTag } from "@/server/logger";
 import { toAdminReservationDetail, toReservationDetail } from "@/server/services/mappers";
 import type { CreateReservationPayload, ReservationQuery } from "@/server/validation/schemas";
-
-const MAX_TRANSACTION_ATTEMPTS = 3;
 
 /** Relations every reservation view needs. */
 const RESERVATION_INCLUDE = {
@@ -113,8 +112,8 @@ export class ReservationService {
     idempotencyKey?: string,
   ): Promise<ReservationDetail> {
     if (idempotencyKey) {
-      const replay = await this.prisma.reservation.findUnique({
-        where: { idempotencyKey },
+      const replay = await this.prisma.reservation.findFirst({
+        where: { idempotencyKey, userId: actor.id },
         include: RESERVATION_INCLUDE,
       });
 
@@ -127,72 +126,110 @@ export class ReservationService {
       }
     }
 
-    const space = await this.prisma.space.findUnique({ where: { id: payload.spaceId } });
-    if (!space) {
-      throw new AppError(ErrorCode.NOT_FOUND, {}, "Space does not exist");
-    }
-
     const window: ReservationWindow = {
       startAt: new Date(payload.startAt),
       endAt: new Date(payload.endAt),
     };
 
-    this.policy.assertSpaceIsActive(space);
     this.policy.validateDraft(window);
-
     const hours = this.policy.hoursOf(window);
-    const totalPrice = this.policy.calculateTotalPrice(space.pricePerHour.toNumber(), hours);
 
-    const created = await this.runSerializable(async () => {
-      const now = new Date();
-      const overlapping = {
-        status: ReservationStatus.CONFIRMED,
-        startAt: { lt: window.endAt },
-        endAt: { gt: window.startAt },
-      } satisfies Prisma.ReservationWhereInput;
+    try {
+      const created = await runSerializableTransaction(
+        this.prisma,
+        async (transaction) => {
+          const space = await transaction.space.findUnique({
+            where: { id: payload.spaceId },
+          });
+          if (!space) {
+            throw new AppError(ErrorCode.NOT_FOUND, {}, "Space does not exist");
+          }
 
-      const spaceConflicts = await this.prisma.reservation.findMany({
-        where: { spaceId: space.id, ...overlapping },
-        select: { startAt: true, endAt: true },
-      });
-      this.policy.assertSpaceSlotIsFree(spaceConflicts);
+          this.policy.assertSpaceIsActive(space);
 
-      const userConflicts = await this.prisma.reservation.findMany({
-        where: { userId: actor.id, ...overlapping },
-        select: { startAt: true, endAt: true },
-      });
-      this.policy.assertUserSlotIsFree(userConflicts);
+          const totalPrice = this.policy.calculateTotalPrice(
+            space.pricePerHour.toNumber(),
+            hours,
+          );
+          const now = new Date();
+          const overlapping = {
+            status: ReservationStatus.CONFIRMED,
+            startAt: { lt: window.endAt },
+            endAt: { gt: window.startAt },
+          } satisfies Prisma.ReservationWhereInput;
 
-      const confirmedFutureReservations = await this.prisma.reservation.count({
-        where: {
-          userId: actor.id,
-          status: ReservationStatus.CONFIRMED,
-          startAt: { gt: now },
+          const spaceConflicts = await transaction.reservation.findMany({
+            where: { spaceId: space.id, ...overlapping },
+            select: { startAt: true, endAt: true },
+          });
+          this.policy.assertSpaceSlotIsFree(spaceConflicts);
+
+          const userConflicts = await transaction.reservation.findMany({
+            where: { userId: actor.id, ...overlapping },
+            select: { startAt: true, endAt: true },
+          });
+          this.policy.assertUserSlotIsFree(userConflicts);
+
+          const confirmedFutureReservations = await transaction.reservation.count({
+            where: {
+              userId: actor.id,
+              status: ReservationStatus.CONFIRMED,
+              startAt: { gt: now },
+            },
+          });
+          this.policy.assertFutureQuota(confirmedFutureReservations);
+
+          return transaction.reservation.create({
+            data: {
+              userId: actor.id,
+              spaceId: space.id,
+              startAt: window.startAt,
+              endAt: window.endAt,
+              totalPrice,
+              status: ReservationStatus.CONFIRMED,
+              idempotencyKey: idempotencyKey ?? null,
+            },
+            include: RESERVATION_INCLUDE,
+          });
         },
+        "reservation.create",
+        () =>
+          new AppError(
+            ErrorCode.RESERVATION_SPACE_OVERLAP,
+            {},
+            "Concurrent bookings exhausted the retry budget",
+          ),
+      );
+
+      Logger.log("INFO", LogTag.RESERVATION, "Reservation created", {
+        reservationId: created.id,
+        spaceId: created.spaceId,
+        hours,
       });
-      this.policy.assertFutureQuota(confirmedFutureReservations);
 
-      return this.prisma.reservation.create({
-        data: {
-          userId: actor.id,
-          spaceId: space.id,
-          startAt: window.startAt,
-          endAt: window.endAt,
-          totalPrice,
-          status: ReservationStatus.CONFIRMED,
-          idempotencyKey: idempotencyKey ?? null,
-        },
-        include: RESERVATION_INCLUDE,
-      });
-    }, "reservation.create");
+      return toReservationDetail(created, this.policy.canCancel(created, actor));
+    } catch (error) {
+      if (isUniqueConstraintError(error, "idempotencyKey")) {
+        const replay = idempotencyKey
+          ? await this.prisma.reservation.findFirst({
+              where: { idempotencyKey, userId: actor.id },
+              include: RESERVATION_INCLUDE,
+            })
+          : null;
 
-    Logger.log("INFO", LogTag.RESERVATION, "Reservation created", {
-      reservationId: created.id,
-      spaceId: space.id,
-      hours,
-    });
+        if (replay) {
+          return toReservationDetail(replay, this.policy.canCancel(replay, actor));
+        }
 
-    return toReservationDetail(created, this.policy.canCancel(created, actor));
+        throw new AppError(
+          ErrorCode.IDEMPOTENCY_KEY_CONFLICT,
+          {},
+          "The idempotency key belongs to another reservation",
+        );
+      }
+
+      throw error;
+    }
   }
 
   /**
@@ -227,58 +264,6 @@ export class ReservationService {
     });
 
     return toReservationDetail(cancelled, this.policy.canCancel(cancelled, actor));
-  }
-
-  /**
-   * Runs a unit of work inside a SERIALIZABLE transaction, retrying the rare
-   * serialization conflicts Postgres reports for concurrent bookings.
-   *
-   * @param operation - Work to run against the shared client.
-   * @param label - Label used in the logs and in the fallback error.
-   * @returns The value produced by the operation.
-   * @throws AppError with code RESERVATION_SPACE_OVERLAP after the last attempt.
-   */
-  private async runSerializable<TResult>(
-    operation: () => Promise<TResult>,
-    label: string,
-  ): Promise<TResult> {
-    let lastError: unknown;
-
-    for (let attempt = 1; attempt <= MAX_TRANSACTION_ATTEMPTS; attempt += 1) {
-      try {
-        return await this.prisma.$transaction(operation, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        });
-      } catch (error) {
-        if (isUniqueConstraintError(error, "idempotencyKey")) {
-          throw new AppError(
-            ErrorCode.RESERVATION_SPACE_OVERLAP,
-            {},
-            "Concurrent creation detected for the same idempotency key",
-          );
-        }
-
-        if (!isSerializationError(error)) {
-          throw error;
-        }
-
-        lastError = error;
-        Logger.log("WARN", LogTag.RESERVATION, "Retrying serializable transaction", {
-          label,
-          attempt,
-        });
-      }
-    }
-
-    Logger.error(LogTag.RESERVATION, "Serializable transaction exhausted its retries", lastError, {
-      label,
-    });
-
-    throw new AppError(
-      ErrorCode.RESERVATION_SPACE_OVERLAP,
-      {},
-      "Concurrent bookings exhausted the retry budget",
-    );
   }
 
   /**
