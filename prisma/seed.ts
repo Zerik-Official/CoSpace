@@ -117,14 +117,15 @@ const SPACE_SEEDS: SpaceSeed[] = [
 async function main(): Promise<void> {
   const config = AppConfig.current;
   const hasher = new PasswordHasher();
+  const passwordHash = await hasher.hash(config.seedAdminPassword);
 
   const administrator = await prisma.user.upsert({
     where: { email: config.seedAdminEmail },
-    update: { role: UserRole.ADMIN, fullName: config.seedAdminName },
+    update: { role: UserRole.ADMIN, fullName: config.seedAdminName, passwordHash },
     create: {
       email: config.seedAdminEmail,
       fullName: config.seedAdminName,
-      passwordHash: await hasher.hash(config.seedAdminPassword),
+      passwordHash,
       role: UserRole.ADMIN,
     },
   });
