@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { LuPencil, LuTriangleAlert } from "react-icons/lu";
 import { SettingsIcon } from "lucide-animated";
 import { useLocale, useTranslations } from "next-intl";
@@ -12,7 +12,8 @@ import { AdminReservationsTable } from "@/components/admin/AdminReservationsTabl
 import { SpaceForm } from "@/components/admin/SpaceForm";
 import { spaceTypeIcon, SPACE_TYPE_MESSAGE_KEYS } from "@/components/spaces/SpaceTypeMeta";
 import { apiRequest } from "@/lib/api/client";
-import { getApiErrorMessage, isApiErrorEnvelope } from "@/lib/api/envelope";
+import { isApiErrorEnvelope } from "@/lib/api/envelope";
+import { useApiErrorMessage } from "@/lib/api/use-api-error-message";
 import type { AdminReservationDetail, AdminSpaceEntry, SpaceDetail } from "@/lib/domain/types";
 import { formatCurrency } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
@@ -28,6 +29,7 @@ export function AdminPanel(): ReactNode {
   const tCommon = useTranslations("Common");
   const tTypes = useTranslations("SpaceTypes");
   const locale = useLocale();
+  const resolveApiError = useApiErrorMessage();
 
   const [spaces, setSpaces] = useState<AdminSpaceEntry[]>([]);
   const [reservations, setReservations] = useState<AdminReservationDetail[]>([]);
@@ -37,35 +39,35 @@ export function AdminPanel(): ReactNode {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const translate = useCallback(
-    (key: string, params?: Record<string, string | number>): string =>
-      t(key as never, params as never),
-    [t],
-  );
+  useEffect(() => {
+    let isCurrent = true;
 
-  const loadPanel = useCallback(async (): Promise<void> => {
-    const [spacesEnvelope, reservationsEnvelope] = await Promise.all([
+    void Promise.all([
       apiRequest<{ spaces: AdminSpaceEntry[] }>("/api/admin/spaces"),
       apiRequest<{ reservations: AdminReservationDetail[] }>("/api/admin/reservations"),
-    ]);
+    ]).then(([spacesEnvelope, reservationsEnvelope]) => {
+      if (!isCurrent) {
+        return;
+      }
 
-    if (isApiErrorEnvelope(spacesEnvelope)) {
-      setErrorMessage(getApiErrorMessage(spacesEnvelope, translate));
-    } else {
-      setSpaces(spacesEnvelope.data.spaces);
-      setErrorMessage(null);
-    }
+      if (isApiErrorEnvelope(spacesEnvelope)) {
+        setErrorMessage(resolveApiError(spacesEnvelope));
+      } else {
+        setSpaces(spacesEnvelope.data.spaces);
+        setErrorMessage(null);
+      }
 
-    if (!isApiErrorEnvelope(reservationsEnvelope)) {
-      setReservations(reservationsEnvelope.data.reservations);
-    }
+      if (!isApiErrorEnvelope(reservationsEnvelope)) {
+        setReservations(reservationsEnvelope.data.reservations);
+      }
 
-    setIsLoading(false);
-  }, [translate]);
+      setIsLoading(false);
+    });
 
-  useEffect(() => {
-    void loadPanel();
-  }, [loadPanel]);
+    return () => {
+      isCurrent = false;
+    };
+  }, [resolveApiError]);
 
   const handleSaved = (space: SpaceDetail): void => {
     setSpaces((current) => {
@@ -89,7 +91,7 @@ export function AdminPanel(): ReactNode {
     setDeactivatingId(null);
 
     if (isApiErrorEnvelope(envelope)) {
-      setErrorMessage(getApiErrorMessage(envelope, translate));
+      setErrorMessage(resolveApiError(envelope));
       return;
     }
 
@@ -110,7 +112,7 @@ export function AdminPanel(): ReactNode {
     setCancellingId(null);
 
     if (isApiErrorEnvelope(envelope)) {
-      setErrorMessage(getApiErrorMessage(envelope, translate));
+      setErrorMessage(resolveApiError(envelope));
       return;
     }
 
@@ -213,6 +215,7 @@ export function AdminPanel(): ReactNode {
         </section>
 
         <SpaceForm
+          key={spaceToEdit?.id ?? "new"}
           spaceToEdit={spaceToEdit}
           onSaved={handleSaved}
           onCancelEdit={() => setSpaceToEdit(null)}
