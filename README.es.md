@@ -41,7 +41,38 @@ CoSpace es una aplicación web full-stack para reservar espacios de coworking po
 - Node.js 20.9 o superior.
 - Bun 1.4.4. El repositorio fija esta versión en `packageManager`.
 - PostgreSQL 16 o un proyecto de Supabase.
-- Docker y Docker Compose solo si se usa el flujo con contenedores.
+- Docker y Docker Compose solo si se usa el flujo con contenedores. No son necesarios para el desarrollo local.
+
+### Instalar Bun
+
+Si `bun` no está instalado, ejecuta el instalador oficial:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Recarga la configuración de tu shell y verifica la instalación:
+
+```bash
+source ~/.zshrc
+bun --version
+```
+
+Si usas Bash, ejecuta `source ~/.bashrc` en su lugar. Si el comando sigue sin encontrarse, agrega el directorio de binarios de Bun al `PATH`:
+
+```bash
+echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.zshrc
+echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+En Windows, usa PowerShell:
+
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+También puedes instalar Bun con Homebrew (`brew install oven-sh/bun/bun`) o npm (`npm install -g bun`). Verifica con `bun --version` antes de continuar.
 
 ## Configuración del entorno
 
