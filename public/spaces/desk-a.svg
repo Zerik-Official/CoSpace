@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img">
+  <rect width="320" height="240" fill="#f1f4ef"/>
+  <rect x="14" y="14" width="292" height="212" rx="6" fill="#fbfcfa" stroke="#14503c" stroke-width="4"/>
+  <path d="M96 14h128" stroke="#b9812a" stroke-width="9"/>
+  <path d="M96 6v16M224 6v16" stroke="#b9812a" stroke-width="4"/>
+  <path d="M136 14v14M184 14v14" stroke="#b9812a" stroke-width="2"/>
+  <rect x="104" y="84" width="112" height="46" rx="4" fill="#dde8e1" stroke="#14503c" stroke-width="3"/>
+  <rect x="146" y="96" width="28" height="20" rx="2" fill="#f1f4ef" stroke="#14503c" stroke-width="2"/>
+  <path d="M160 116v10" stroke="#14503c" stroke-width="2"/>
+  <rect x="128" y="146" width="64" height="32" rx="12" fill="none" stroke="#14503c" stroke-width="3"/>
+  <path d="M128 162h64" stroke="#14503c" stroke-width="2"/>
+  <circle cx="252" cy="186" r="17" fill="none" stroke="#14503c" stroke-width="3"/>
+  <circle cx="252" cy="186" r="6" fill="#14503c"/>
+  <path d="M104 214h112" stroke="#93a49a" stroke-width="2" stroke-dasharray="5 5"/>
+  <path d="M104 208v12M216 208v12" stroke="#93a49a" stroke-width="2"/>
+  <circle cx="160" cy="52" r="13" fill="none" stroke="#b9812a" stroke-width="2" stroke-dasharray="3 4"/>
+</svg>
