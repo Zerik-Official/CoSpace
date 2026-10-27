@@ -8,6 +8,7 @@ export interface VenueDateTimeParts {
   hour: number;
   minute: number;
   second: number;
+  millisecond: number;
 }
 
 /**
@@ -42,6 +43,7 @@ export class VenueClock {
       hour: wallClock.getHours(),
       minute: wallClock.getMinutes(),
       second: wallClock.getSeconds(),
+      millisecond: wallClock.getMilliseconds(),
     };
   }
 
@@ -116,7 +118,7 @@ export class VenueClock {
   isWholeHour(instant: Date): boolean {
     const parts = this.toParts(instant);
 
-    return parts.minute === 0 && parts.second === 0;
+    return parts.minute === 0 && parts.second === 0 && parts.millisecond === 0;
   }
 
   /**
