@@ -1,5 +1,3 @@
-import type { ErrorCode } from "@/server/errors";
-
 const UNIQUE_CONSTRAINT_VIOLATION = "P2002";
 const SERIALIZATION_FAILURE = "P2034";
 /**
