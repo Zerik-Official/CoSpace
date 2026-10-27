@@ -126,13 +126,17 @@ export class ReservationPolicy {
       );
     }
 
+    const startDayKey = this.clock.toDayKey(window.startAt);
+    const endDayKey = this.clock.toDayKey(window.endAt);
     const startParts = this.clock.toParts(window.startAt);
     const endParts = this.clock.toParts(window.endAt);
     const startMinuteOfDay = startParts.hour * 60 + startParts.minute;
     const endMinuteOfDay = endParts.hour * 60 + endParts.minute;
 
     if (
+      startDayKey !== endDayKey ||
       startMinuteOfDay < RESERVATION_RULES.openingHour * 60 ||
+      startMinuteOfDay >= RESERVATION_RULES.closingHour * 60 ||
       endMinuteOfDay > RESERVATION_RULES.closingHour * 60
     ) {
       throw new AppError(
