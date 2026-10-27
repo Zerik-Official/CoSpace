@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { MenuIcon, XIcon } from "lucide-animated";
+import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils/cn";
@@ -35,6 +36,7 @@ const TONE_CLASSES: Record<"paper" | "pine", string> = {
  * @returns The rendered navigation bar.
  */
 export function NavShell({ links, tone = "paper", children }: NavShellProps): ReactNode {
+  const t = useTranslations("Nav");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
 
@@ -45,7 +47,7 @@ export function NavShell({ links, tone = "paper", children }: NavShellProps): Re
           <Wordmark />
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex" aria-label="primary">
+        <nav className="hidden items-center gap-1 md:flex" aria-label={t("primary")}>
           {links.map((link) => {
             const isActive = pathname === link.href;
 
@@ -76,7 +78,7 @@ export function NavShell({ links, tone = "paper", children }: NavShellProps): Re
           onClick={() => setIsMenuOpen((open) => !open)}
           className="flex size-10 items-center justify-center rounded-[var(--radius-card)] border border-current/25 md:hidden"
           aria-expanded={isMenuOpen}
-          aria-label={isMenuOpen ? "closeMenu" : "openMenu"}
+          aria-label={isMenuOpen ? t("closeMenu") : t("openMenu")}
         >
           {isMenuOpen ? <XIcon size={18} /> : <MenuIcon size={18} />}
         </button>
@@ -84,7 +86,7 @@ export function NavShell({ links, tone = "paper", children }: NavShellProps): Re
 
       {isMenuOpen ? (
         <div className={cn("border-t px-5 py-4 md:hidden", TONE_CLASSES[tone])}>
-          <nav className="flex flex-col gap-1" aria-label="primary">
+          <nav className="flex flex-col gap-1" aria-label={t("primary")}>
             {links.map((link) => (
               <Link
                 key={link.href}
