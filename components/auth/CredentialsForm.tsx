@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { LuArrowRight } from "react-icons/lu";
 import { LockIcon } from "lucide-animated";
 import { useTranslations } from "next-intl";
@@ -11,8 +11,10 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 import { useSession } from "@/components/session/SessionProvider";
 import { apiRequest } from "@/lib/api/client";
-import { getApiErrorMessage, isApiErrorEnvelope } from "@/lib/api/envelope";
+import { isApiErrorEnvelope } from "@/lib/api/envelope";
+import { useApiErrorMessage } from "@/lib/api/use-api-error-message";
 import type { SessionUser } from "@/lib/domain/types";
+import { routing } from "@/i18n/routing";
 
 /** Mode the form is rendered in. */
 export type CredentialsMode = "login" | "register";
@@ -38,6 +40,18 @@ function nextDestination(): string {
     return "/dashboard";
   }
 
+  const segments = requested.split("/").filter(Boolean);
+  const firstSegment = segments[0];
+
+  if (
+    firstSegment &&
+    (routing.locales as readonly string[]).includes(firstSegment)
+  ) {
+    const withoutLocale = `/${segments.slice(1).join("/")}`;
+
+    return withoutLocale === "/" ? "/dashboard" : withoutLocale;
+  }
+
   return requested;
 }
 
@@ -50,6 +64,7 @@ function nextDestination(): string {
  */
 export function CredentialsForm({ mode }: CredentialsFormProps): ReactNode {
   const t = useTranslations("Auth");
+  const resolveApiError = useApiErrorMessage();
   const { reload } = useSession();
   const router = useRouter();
 
@@ -58,7 +73,7 @@ export function CredentialsForm({ mode }: CredentialsFormProps): ReactNode {
 
   const isRegister = mode === "register";
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -78,7 +93,7 @@ export function CredentialsForm({ mode }: CredentialsFormProps): ReactNode {
 
     if (isApiErrorEnvelope(envelope)) {
       setIsSubmitting(false);
-      setErrorMessage(getApiErrorMessage(envelope, (key, params) => t(key as never, params as never)));
+      setErrorMessage(resolveApiError(envelope));
       return;
     }
 
