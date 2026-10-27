@@ -64,7 +64,6 @@ export default async function SpaceDetailPage({
 
   const space = await container.spaces.findPublicDetail(id);
   const availability = await container.spaces.findAvailability(id, venueDate);
-  const isActive = space.isActive;
 
   return (
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-8 px-5 py-10 sm:px-8 md:py-14">
@@ -98,7 +97,6 @@ export default async function SpaceDetailPage({
                 {spaceTypeIcon(space.type, "size-3.5")}
                 {tTypes(SPACE_TYPE_MESSAGE_KEYS[space.type])}
               </Badge>
-              {!isActive ? <Badge tone="ochre">{t("notFound")}</Badge> : null}
             </div>
             <h1 className="font-display text-[2.1rem] leading-tight text-ink">{space.name}</h1>
             <p className="max-w-[68ch] text-[0.98rem] leading-relaxed text-ink-soft">
