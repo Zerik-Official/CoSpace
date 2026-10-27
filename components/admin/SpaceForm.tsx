@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { PlusIcon } from "lucide-animated";
 import { useTranslations } from "next-intl";
 
@@ -8,7 +8,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { CheckboxField, NumberField, SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { apiRequest } from "@/lib/api/client";
-import { getApiErrorMessage, isApiErrorEnvelope } from "@/lib/api/envelope";
+import { isApiErrorEnvelope } from "@/lib/api/envelope";
+import { useApiErrorMessage } from "@/lib/api/use-api-error-message";
 import { AMENITY_KEYS, type AmenityKey } from "@/lib/domain/amenities";
 import { SpaceType } from "@/lib/domain/enums";
 import type { SpaceDetail } from "@/lib/domain/types";
@@ -43,6 +44,34 @@ const EMPTY_VALUES: SpaceFormValues = {
   amenities: ["wifi"],
 };
 
+/**
+ * Builds the editable values for the space received from the parent.
+ *
+ * @param spaceToEdit - Space being edited, or null to create a new one.
+ * @returns The initial form values.
+ */
+function valuesFromSpace(spaceToEdit: SpaceDetail | null): SpaceFormValues {
+  if (!spaceToEdit) {
+    return {
+      ...EMPTY_VALUES,
+      amenities: [...EMPTY_VALUES.amenities],
+    };
+  }
+
+  return {
+    code: spaceToEdit.code,
+    name: spaceToEdit.name,
+    description: spaceToEdit.description,
+    type: spaceToEdit.type,
+    capacity: String(spaceToEdit.capacity),
+    pricePerHour: String(spaceToEdit.pricePerHour),
+    imageUrl: spaceToEdit.imageUrl,
+    amenities: spaceToEdit.amenities.filter((amenity): amenity is AmenityKey =>
+      (AMENITY_KEYS as readonly string[]).includes(amenity),
+    ),
+  };
+}
+
 const IMAGE_OPTIONS = [
   "/spaces/desk-a.svg",
   "/spaces/desk-b.svg",
@@ -63,30 +92,11 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
   const t = useTranslations("Admin");
   const tAmenities = useTranslations("Amenities");
   const tTypes = useTranslations("SpaceTypes");
+  const resolveApiError = useApiErrorMessage();
 
-  const [values, setValues] = useState<SpaceFormValues>(EMPTY_VALUES);
+  const [values, setValues] = useState<SpaceFormValues>(() => valuesFromSpace(spaceToEdit));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!spaceToEdit) {
-      setValues(EMPTY_VALUES);
-      return;
-    }
-
-    setValues({
-      code: spaceToEdit.code,
-      name: spaceToEdit.name,
-      description: spaceToEdit.description,
-      type: spaceToEdit.type,
-      capacity: String(spaceToEdit.capacity),
-      pricePerHour: String(spaceToEdit.pricePerHour),
-      imageUrl: spaceToEdit.imageUrl,
-      amenities: spaceToEdit.amenities.filter((amenity): amenity is AmenityKey =>
-        (AMENITY_KEYS as readonly string[]).includes(amenity),
-      ),
-    });
-  }, [spaceToEdit]);
 
   const toggleAmenity = (amenity: AmenityKey): void => {
     setValues((current) => ({
@@ -97,7 +107,7 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
     }));
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -123,13 +133,13 @@ export function SpaceForm({ spaceToEdit, onSaved, onCancelEdit }: SpaceFormProps
     setIsSubmitting(false);
 
     if (isApiErrorEnvelope(envelope)) {
-      setErrorMessage(getApiErrorMessage(envelope, (key, params) => t(key as never, params as never)));
+      setErrorMessage(resolveApiError(envelope));
       return;
     }
 
     onSaved(envelope.data.space);
     if (!spaceToEdit) {
-      setValues(EMPTY_VALUES);
+      setValues(valuesFromSpace(null));
     }
   };
 
