@@ -5,6 +5,7 @@ import { CalendarDaysIcon, CircleCheckIcon, HourglassIcon } from "lucide-animate
 import { LuArrowRight } from "react-icons/lu";
 import { useLocale, useTranslations } from "next-intl";
 
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { ActionLink } from "@/components/ui/ActionLink";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -13,7 +14,8 @@ import { SelectField } from "@/components/ui/Field";
 import { buildHourBlocks, hourBlockClasses } from "@/components/ui/hour-blocks";
 import { useSession } from "@/components/session/SessionProvider";
 import { apiRequest } from "@/lib/api/client";
-import { getApiErrorMessage, isApiErrorEnvelope } from "@/lib/api/envelope";
+import { isApiErrorEnvelope } from "@/lib/api/envelope";
+import { useApiErrorMessage } from "@/lib/api/use-api-error-message";
 import type { AvailabilityInterval, ReservationDetail, SpaceAvailability, SpaceDetail } from "@/lib/domain/types";
 import { BOOKABLE_START_HOURS, RESERVATION_RULES } from "@/lib/domain/rules";
 import { cn } from "@/lib/utils/cn";
@@ -57,6 +59,9 @@ export function BookingPanel({
   const t = useTranslations("Booking");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
+  const resolveApiError = useApiErrorMessage();
+  const router = useRouter();
+  const pathname = usePathname();
   const { user, isResolving } = useSession();
 
   const [availability, setAvailability] = useState<AvailabilityInterval[]>(busyIntervals);
@@ -71,7 +76,6 @@ export function BookingPanel({
 
   useEffect(() => {
     let isCurrent = true;
-    setIsLoadingAvailability(true);
 
     void apiRequest<SpaceAvailability>(`/api/spaces/${space.id}/availability?date=${venueDate}`).then(
       (envelope) => {
@@ -114,15 +118,19 @@ export function BookingPanel({
     [busyHours],
   );
 
+  const effectiveStartHour = availableStartHours.includes(startHour)
+    ? startHour
+    : availableStartHours[0] ?? BOOKABLE_START_HOURS[0];
+
   const availableDurations = useMemo(() => {
     const maximum = Math.min(
       RESERVATION_RULES.maxHours,
-      RESERVATION_RULES.closingHour - startHour,
+      RESERVATION_RULES.closingHour - effectiveStartHour,
     );
     const durations: number[] = [];
 
     for (let candidate = RESERVATION_RULES.minHours; candidate <= maximum; candidate += 1) {
-      const fits = Array.from({ length: candidate }, (_value, index) => startHour + index).every(
+      const fits = Array.from({ length: candidate }, (_value, index) => effectiveStartHour + index).every(
         (hour) => !busyHours.has(hour),
       );
 
@@ -132,24 +140,16 @@ export function BookingPanel({
     }
 
     return durations;
-  }, [busyHours, startHour]);
+  }, [busyHours, effectiveStartHour]);
 
-  useEffect(() => {
-    if (!availableStartHours.includes(startHour)) {
-      setStartHour(availableStartHours[0] ?? BOOKABLE_START_HOURS[0]);
-    }
-  }, [availableStartHours, startHour]);
+  const effectiveHours = availableDurations.includes(hours)
+    ? hours
+    : availableDurations[0] ?? RESERVATION_RULES.minHours;
 
-  useEffect(() => {
-    if (!availableDurations.includes(hours)) {
-      setHours(availableDurations[0] ?? RESERVATION_RULES.minHours);
-    }
-  }, [availableDurations, hours]);
-
-  const startAt = clock.fromDayKeyAndHour(venueDate, startHour);
-  const endAt = clock.fromDayKeyAndHour(venueDate, startHour + hours);
+  const startAt = clock.fromDayKeyAndHour(venueDate, effectiveStartHour);
+  const endAt = clock.fromDayKeyAndHour(venueDate, effectiveStartHour + effectiveHours);
   const selectedHours = new Set(
-    Array.from({ length: hours }, (_value, index) => startHour + index),
+    Array.from({ length: effectiveHours }, (_value, index) => effectiveStartHour + index),
   );
   const blocks = buildHourBlocks(venueDate, availability, clock);
 
@@ -170,7 +170,7 @@ export function BookingPanel({
     setIsSubmitting(false);
 
     if (isApiErrorEnvelope(envelope)) {
-      setErrorMessage(getApiErrorMessage(envelope, (key, params) => t(key as never, params as never)));
+      setErrorMessage(resolveApiError(envelope));
       return;
     }
 
@@ -232,7 +232,11 @@ export function BookingPanel({
           name="booking-day"
           label={t("dateLabel")}
           value={venueDate}
-          onChange={(event) => window.location.assign(`?date=${event.target.value}`)}
+          onChange={(event) => {
+            setIsLoadingAvailability(true);
+            setAvailability([]);
+            router.replace(`${pathname}?date=${event.target.value}`);
+          }}
           options={venueDays.map((day) => ({
             value: day,
             label: formatVenueDate(`${day}T12:00:00.000Z`, locale),
@@ -241,7 +245,7 @@ export function BookingPanel({
         <SelectField
           name="booking-start-hour"
           label={t("startHourLabel")}
-          value={String(startHour)}
+          value={String(effectiveStartHour)}
           onChange={(event) => setStartHour(Number(event.target.value))}
           options={availableStartHours.map((hour) => ({
             value: String(hour),
@@ -253,7 +257,7 @@ export function BookingPanel({
       <SelectField
         name="booking-hours"
         label={t("hoursLabel")}
-        value={String(hours)}
+        value={String(effectiveHours)}
         onChange={(event) => setHours(Number(event.target.value))}
         options={availableDurations.map((duration) => ({
           value: String(duration),
@@ -268,10 +272,10 @@ export function BookingPanel({
         </span>
         <span className="flex items-baseline gap-2">
           <span className="font-display text-[1.5rem] font-semibold tabular-nums text-ink">
-            {formatCurrency(space.pricePerHour * hours, locale)}
+            {formatCurrency(space.pricePerHour * effectiveHours, locale)}
           </span>
           <span className="text-[0.78rem] text-ink-soft">
-            {formatHours(hours, locale)} x {formatCurrency(space.pricePerHour, locale)}
+            {formatHours(effectiveHours, locale)} x {formatCurrency(space.pricePerHour, locale)}
           </span>
         </span>
       </div>
