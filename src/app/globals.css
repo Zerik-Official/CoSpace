@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f1f4ef;
+  --color-surface: #ffffff;
+  --color-ink: #131c18;
+  --color-ink-soft: #536158;
+  --color-pine: #14503c;
+  --color-pine-deep: #0d3628;
+  --color-pine-soft: #dde8e1;
+  --color-ochre: #b9812a;
+  --color-ochre-soft: #f3e6cd;
+  --color-line: #c6d0c8;
+  --color-line-strong: #93a49a;
+
+  --font-display: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-instrument), "Helvetica Neue", Arial, sans-serif;
+
+  --radius-card: 6px;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+::selection {
+  background-color: var(--color-pine);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-pine);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+@keyframes block-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hour-block {
+  animation: block-in 340ms cubic-bezier(0.2, 0.7, 0.3, 1) backwards;
+}
+
+.reveal {
+  animation: panel-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1) backwards;
+}
+
+.hatch-busy {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.55) 0,
+    rgba(255, 255, 255, 0.55) 2px,
+    transparent 2px,
+    transparent 5px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hour-block,
+  .reveal {
+    animation: none;
+  }
+}
