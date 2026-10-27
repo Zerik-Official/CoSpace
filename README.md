@@ -10,13 +10,14 @@
   <img src="https://img.shields.io/badge/Prisma-111111?style=for-the-badge&logo=prisma">
   <img src="https://img.shields.io/badge/PostgreSQL-111111?style=for-the-badge&logo=postgresql">
   <img src="https://img.shields.io/badge/Supabase-111111?style=for-the-badge&logo=supabase">
+  <img src="https://img.shields.io/badge/Cloudflare_Turnstile-111111?style=for-the-badge&logo=cloudflare">
   <img src="https://img.shields.io/badge/Docker-111111?style=for-the-badge&logo=docker">
   <img src="https://img.shields.io/badge/Vercel-111111?style=for-the-badge&logo=vercel">
   <img src="https://img.shields.io/badge/Bun-111111?style=for-the-badge&logo=bun">
 </p>
 
 <p align="center">
-  <img src=".github/preview.png" alt="CoSpace preview"/>
+  <img src=".github/preview.en.png" alt="CoSpace preview"/>
 </p>
 
 <p align="center">
@@ -32,6 +33,7 @@ CoSpace is a full-stack web application for booking coworking spaces by the hour
 - Prisma 7 with PostgreSQL and the `@prisma/adapter-pg` driver adapter.
 - Supabase as the managed PostgreSQL database in production.
 - `next-intl` for Spanish and English.
+- Cloudflare Turnstile on the login and registration forms.
 - JWT HS256 access tokens and opaque refresh tokens stored as SHA-256 hashes.
 - Vitest for business-rule tests.
 - A multi-stage Docker image and GitHub Actions for continuous integration.
@@ -41,6 +43,7 @@ CoSpace is a full-stack web application for booking coworking spaces by the hour
 - Node.js 20.9 or newer.
 - Bun 1.4.4. The repository pins this version in `packageManager`.
 - PostgreSQL 16 or a Supabase project.
+- A Cloudflare account for the production Turnstile widget. Local development can use the official test keys.
 - Docker and Docker Compose only if you use the container workflow. They are not required for local development.
 
 ### Install Bun
@@ -95,6 +98,8 @@ You can also install Bun with Homebrew (`brew install oven-sh/bun/bun`) or npm (
    | `DATABASE_URL` | Yes | PostgreSQL connection string. In Supabase, use the Session pooler URI. |
    | `JWT_ACCESS_SECRET` | Yes | Secret of at least 32 characters used to sign access tokens. |
    | `JWT_REFRESH_SECRET` | Yes | Secret of at least 32 characters reserved for refresh-token material. |
+   | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Yes | Public Cloudflare Turnstile site key embedded in the login and registration forms. |
+   | `TURNSTILE_SECRET_KEY` | Yes | Server-only Cloudflare Turnstile secret used to verify tokens. |
    | `ACCESS_TOKEN_EXPIRES_IN` | No | Access token lifetime. Defaults to `15m`. |
    | `REFRESH_TOKEN_EXPIRES_IN` | No | Refresh token lifetime. Defaults to `7d`. |
    | `NEXT_PUBLIC_APP_URL` | No | Public application URL. Defaults to `http://localhost:3000`. |
@@ -110,7 +115,7 @@ You can also install Bun with Homebrew (`brew install oven-sh/bun/bun`) or npm (
    openssl rand -hex 32
    ```
 
-5. Generate the Prisma client. This step is required in a clean clone because `server/db/generated` is ignored by Git:
+5. Generate the Prisma client. This step is required in a clean clone because `src/server/db/generated` is ignored by Git:
 
    ```bash
    bun run db:generate
@@ -130,6 +135,24 @@ You can also install Bun with Homebrew (`brew install oven-sh/bun/bun`) or npm (
    ```
 
 The application is available at `http://localhost:3000`.
+
+### Cloudflare Turnstile
+
+Login and registration require a Turnstile token. The token is verified on the server before the credentials or the new account are processed.
+
+1. Open the [Cloudflare dashboard](https://dash.cloudflare.com) and go to **Turnstile**.
+2. Add a widget for the site.
+3. Add `localhost` for development and the production hostname.
+4. Copy the site key into `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and the secret key into `TURNSTILE_SECRET_KEY`.
+
+For local development, use the official test keys instead of creating a widget:
+
+```dotenv
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+```
+
+The site key is public and is embedded into the pages at build time. The secret key stays on the server: never expose it with a `NEXT_PUBLIC_` prefix. The test keys always pass and must not be used in production.
 
 ## Administrator account
 
@@ -160,7 +183,7 @@ The seed also creates eight example spaces: four desks, two meeting rooms, and t
 - Spaces are never deleted; they are deactivated. A space with confirmed bookings that have not ended cannot be deactivated.
 - The `Idempotency-Key` header makes reservation creation repeatable and can only be reused by the account that created it.
 
-Reservation rules live in `server/domain/reservation-policy.ts`, and space lifecycle rules live in `server/domain/space-policy.ts`. Critical booking checks run inside a `SERIALIZABLE` transaction with retries, so concurrent requests cannot bypass the overlap, quota, or active-space rules.
+Reservation rules live in `src/server/domain/reservation-policy.ts`, and space lifecycle rules live in `src/server/domain/space-policy.ts`. Critical booking checks run inside a `SERIALIZABLE` transaction with retries, so concurrent requests cannot bypass the overlap, quota, or active-space rules.
 
 ## Scripts
 
@@ -185,16 +208,17 @@ Reservation rules live in `server/domain/reservation-policy.ts`, and space lifec
 bun run test
 ```
 
-The suite covers duration, opening hours, advance-window, overlap, quota, cancellation, space-state, and public image-path rules. It does not need a database.
+The suite covers duration, opening hours, advance-window, overlap, quota, cancellation, space-state, and public image-path rules, plus Turnstile verification and authentication payload validation. It does not need a database.
 
 ## Docker
 
 ### Production image
 
-The image uses Bun and a multi-stage build. `NEXT_PUBLIC_*` variables are embedded in the bundle at build time; secrets are provided at runtime.
+The image uses Bun and a multi-stage build. `NEXT_PUBLIC_*` variables are embedded in the bundle at build time; secrets are provided at runtime. The Turnstile site key is public but must be passed as a build argument, while `TURNSTILE_SECRET_KEY` comes from the runtime environment file.
 
 ```bash
 docker build \
+  --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-site-key \
   --build-arg NEXT_PUBLIC_APP_URL=https://your-domain.example \
   --build-arg NEXT_PUBLIC_VENUE_TIMEZONE=America/Bogota \
   --build-arg NEXT_PUBLIC_VENUE_CURRENCY=COP \
@@ -210,7 +234,7 @@ The container listens on `0.0.0.0:3000`. If `DATABASE_URL` points to a PostgreSQ
 
 ### Docker Compose
 
-The `docker-compose.yml` file starts PostgreSQL on port `5433` and the application on port `3000`. The application overrides `DATABASE_URL` to point to the `db` service, so you do not need to change `.env` for this workflow.
+The `docker-compose.yml` file starts PostgreSQL on port `5433` and the application on port `3000`. The application overrides `DATABASE_URL` to point to the `db` service, so you do not need to change `.env` for this workflow. Make sure both Turnstile keys are set in `.env` before building the application image.
 
 ```bash
 cp .env.example .env
@@ -256,6 +280,8 @@ The `cospace-postgres` volume keeps the data. Use `docker compose down -v` only 
    - `DATABASE_URL`
    - `JWT_ACCESS_SECRET`
    - `JWT_REFRESH_SECRET`
+   - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+   - `TURNSTILE_SECRET_KEY`
    - `ACCESS_TOKEN_EXPIRES_IN`
    - `REFRESH_TOKEN_EXPIRES_IN`
    - `NEXT_PUBLIC_APP_URL`
@@ -276,23 +302,26 @@ The `cospace-postgres` volume keeps the data. Use `docker compose down -v` only 
 ## Project structure
 
 ```text
-app/                    Next.js routes, layouts, and route handlers
-  [locale]/             Public, private, and administration pages
-  api/                  REST endpoints
-components/             UI components
-  admin/                Administration form and table
-  booking/              Booking form
-  layout/               Navigation and footer
-  reservations/         User booking dashboard
-  session/              Browser session context
-  ui/                   Base components
-i18n/                   Language configuration and messages
-lib/                    Shared utilities and domain contracts
-messages/               English and Spanish translations
+src/                    Application source
+  app/                  Next.js routes, layouts, and route handlers
+    [locale]/           Public, private, and administration pages
+    api/                REST endpoints
+  components/           UI components
+    admin/              Administration form and table
+    auth/               Login, registration, and Turnstile widget
+    booking/            Booking form
+    layout/             Navigation and footer
+    reservations/       User booking dashboard
+    session/            Browser session context
+    ui/                 Base components
+  i18n/                 Language configuration
+  lib/                  Shared utilities and domain contracts
+  messages/             English and Spanish translations
+  server/               Domain, services, security, HTTP, and database code
+  tests/                Business-rule tests
+  proxy.ts              Private-route guard and locale routing
 prisma/                 Schema, migrations, and seed
-server/                 Domain, services, security, HTTP, and database code
-tests/                  Business-rule tests
-proxy.ts                Private-route guard and locale routing
+public/                 Static assets and space illustrations
 Dockerfile              Production image
 docker-compose.yml      PostgreSQL and application for local development
 ```
@@ -303,7 +332,8 @@ docker-compose.yml      PostgreSQL and application for local development
 - Refresh tokens are opaque, stored hashed, and rotated when the session is renewed.
 - Authentication cookies are `httpOnly`, `sameSite=lax`, and `secure` in production.
 - The proxy protects `/dashboard` and `/admin`; the backend checks the session and role again on every endpoint.
-- Authentication endpoints are rate-limited.
+- Login and registration require a Cloudflare Turnstile token verified on the server.
+- Login attempts are rate-limited per client address and email.
 - API errors use stable codes and are translated on the client; internal details are only written to logs.
 - Reservation creation requires an `Idempotency-Key` from the UI, and the key is bound to the user who created it.
 
