@@ -47,8 +47,21 @@ export function SessionProvider({ children }: { children: ReactNode }): ReactNod
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let isCurrent = true;
+
+    void apiRequest<{ user: SessionUser | null }>("/api/auth/session").then((envelope) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setUser(isApiErrorEnvelope(envelope) ? null : envelope.data.user);
+      setIsResolving(false);
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   const value = useMemo<SessionContextValue>(
     () => ({ user, isResolving, reload, logout }),
