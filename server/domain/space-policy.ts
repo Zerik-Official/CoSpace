@@ -7,22 +7,22 @@ export interface ActivatableSpace {
 
 /**
  * Pure implementation of the space life cycle rules: spaces are never deleted,
- * they are deactivated, and a space with future confirmed reservations cannot be
- * deactivated (rule 13).
+ * they are deactivated, and a space with confirmed reservations that have not
+ * finished cannot be deactivated (rule 13).
  */
 export class SpacePolicy {
   /**
-   * Applies rule 13: a space holding future confirmed reservations stays active.
+   * Applies rule 13: a space holding unfinished confirmed reservations stays active.
    *
-   * @param futureConfirmedReservations - Future confirmed reservations of the space.
+   * @param pendingConfirmedReservations - Confirmed reservations that have not ended.
    * @throws AppError when the space still has reservations to honour.
    */
-  assertDeactivatable(futureConfirmedReservations: number): void {
-    if (futureConfirmedReservations > 0) {
+  assertDeactivatable(pendingConfirmedReservations: number): void {
+    if (pendingConfirmedReservations > 0) {
       throw new AppError(
         ErrorCode.SPACE_HAS_FUTURE_RESERVATIONS,
-        { reservations: futureConfirmedReservations },
-        "A space with future confirmed reservations cannot be deactivated",
+        { reservations: pendingConfirmedReservations },
+        "A space with pending confirmed reservations cannot be deactivated",
       );
     }
   }
